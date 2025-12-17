@@ -157,7 +157,20 @@ pub fn router(state: AppState) -> Router {
         router = router.layer(cors);
     }
 
-    router.with_state(state).layer(TraceLayer::new_for_http())
+    let mut router = router
+        .with_state(state.clone())
+        .layer(TraceLayer::new_for_http());
+
+    if let Some(base) = &state.config.public_base_url {
+        let layer = tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+            header::HeaderName::from_static("x-greentic-public-base"),
+            http::HeaderValue::from_str(base)
+                .unwrap_or_else(|_| http::HeaderValue::from_static("")),
+        );
+        router = router.layer(layer);
+    }
+
+    router
 }
 
 #[axum::debug_handler]

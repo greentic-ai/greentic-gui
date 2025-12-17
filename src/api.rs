@@ -75,7 +75,7 @@ pub async fn get_gui_config(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{AppConfig, TenantMap};
+    use crate::config::AppConfig;
     use crate::fragments::{FragmentContext, FragmentRenderer};
     use crate::integration::{
         SessionError, SessionInfo, SessionManager, TelemetryEvent, TelemetrySink,
@@ -206,12 +206,12 @@ mod tests {
     ) -> AppState {
         let cfg = AppConfig {
             bind_addr: "127.0.0.1:0".parse::<SocketAddr>().unwrap(),
+            public_base_url: None,
             pack_root: std::path::PathBuf::from("./packs"),
             default_tenant: "tenant".into(),
             enable_cors: false,
             pack_cache_ttl: Duration::from_secs(0),
             session_ttl: Duration::from_secs(0),
-            tenant_map: TenantMap::default(),
             env_id: "dev".into(),
             default_team: "team".into(),
             distributor: None,
@@ -220,6 +220,30 @@ mod tests {
             oauth_audience: None,
             oauth_jwks_url: None,
             oauth_required_scopes: vec![],
+            resolved: greentic_config_types::GreenticConfig {
+                schema_version: greentic_config_types::ConfigVersion::v1(),
+                environment: greentic_config_types::EnvironmentConfig {
+                    env_id: greentic_types::EnvId::new("dev").unwrap(),
+                    deployment: None,
+                    connection: None,
+                    region: None,
+                },
+                paths: greentic_config_types::PathsConfig {
+                    greentic_root: std::path::PathBuf::from("."),
+                    state_dir: std::path::PathBuf::from("."),
+                    cache_dir: std::path::PathBuf::from("."),
+                    logs_dir: std::path::PathBuf::from("."),
+                },
+                packs: None,
+                services: None,
+                events: None,
+                runtime: greentic_config_types::RuntimeConfig::default(),
+                telemetry: greentic_config_types::TelemetryConfig::default(),
+                network: greentic_config_types::NetworkConfig::default(),
+                deployer: None,
+                secrets: greentic_config_types::SecretsBackendRefConfig::default(),
+                dev: None,
+            },
         };
         let pack_provider: Arc<dyn PackProvider> = Arc::new(MockPackProvider {
             requirements,

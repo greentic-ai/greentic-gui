@@ -18,13 +18,15 @@
     <p id="login-error" style="color:red; display:none;"></p>
   </main>
   <script>
+    const ALLOWED_PROVIDERS = new Set(["microsoft", "google", "github"]);
     function startAuth(provider) {
-      if (!provider) return;
-      window.location = `/auth/${provider}/start`;
+      if (!provider || !ALLOWED_PROVIDERS.has(provider)) return;
+      const safeProvider = encodeURIComponent(provider);
+      window.location.assign(`/auth/${safeProvider}/start`);
     }
-    document.querySelectorAll('[data-provider]').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const provider = e.target.getAttribute('data-provider');
+    document.querySelectorAll("[data-provider]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        const provider = e.currentTarget.getAttribute("data-provider");
         startAuth(provider);
       });
     });

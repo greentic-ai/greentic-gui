@@ -1,19 +1,19 @@
-use anyhow::Context;
-use serde::{Deserialize, Serialize};
+use greentic_config::{ConfigLayer, ConfigResolver};
+use greentic_config_types::{GreenticConfig, PackSourceConfig};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// Runtime configuration for the GUI server.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Runtime configuration for the GUI server resolved from greentic-config.
+#[derive(Debug, Clone)]
 pub struct AppConfig {
     pub bind_addr: SocketAddr,
+    pub public_base_url: Option<String>,
     pub pack_root: PathBuf,
     pub default_tenant: String,
     pub enable_cors: bool,
     pub pack_cache_ttl: Duration,
     pub session_ttl: Duration,
-    pub tenant_map: TenantMap,
     pub env_id: String,
     pub default_team: String,
     pub distributor: Option<DistributorConfig>,
@@ -21,109 +21,134 @@ pub struct AppConfig {
     pub oauth_issuer: Option<String>,
     pub oauth_audience: Option<String>,
     pub oauth_jwks_url: Option<String>,
-    #[serde(default)]
     pub oauth_required_scopes: Vec<String>,
+    pub resolved: GreenticConfig,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct TenantMap(pub std::collections::HashMap<String, String>);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct DistributorConfig {
     pub base_url: String,
     pub environment_id: String,
-    pub auth_token: Option<String>,
+    /// Reference to a secrets entry for the token (not the token itself).
+    pub auth_token_ref: Option<String>,
     /// JSON string mapping pack kind to {pack_id, component_id, version}
     pub packs_json: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct LoadedConfig {
+    pub app: AppConfig,
+    pub provenance: greentic_config::ProvenanceMap,
+    pub warnings: Vec<String>,
+}
+
 impl AppConfig {
-    pub fn from_env() -> anyhow::Result<Self> {
-        let bind_addr: SocketAddr = std::env::var("BIND_ADDR")
-            .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
-            .parse()
-            .context("failed to parse BIND_ADDR")?;
+    pub fn tenant_for_domain<'a>(&'a self, _domain: &'a str) -> &'a str {
+        // No domain map yet; default to configured tenant.
+        &self.default_tenant
+    }
+}
 
-        let pack_root =
-            PathBuf::from(std::env::var("PACK_ROOT").unwrap_or_else(|_| "packs".to_string()));
+pub fn load_config(
+    cli: &crate::CliArgs,
+    cli_layer: Option<ConfigLayer>,
+) -> anyhow::Result<LoadedConfig> {
+    let mut resolver = ConfigResolver::new().allow_dev(cli.allow_dev);
+    if let Some(root) = cli.project_root.clone() {
+        resolver = resolver.with_project_root(root);
+    } else if let Some(root) = project_root_from_cwd()? {
+        resolver = resolver.with_project_root(root);
+    }
 
-        let default_tenant =
-            std::env::var("DEFAULT_TENANT").unwrap_or_else(|_| "tenant-default".to_string());
+    if let Some(layer) = cli_layer {
+        resolver = resolver.with_cli_overrides(layer);
+    }
 
-        let enable_cors = std::env::var("ENABLE_CORS")
-            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
+    let resolved = resolver.load()?;
+    let app = map_to_app_config(resolved.config.clone(), cli);
+    Ok(LoadedConfig {
+        app,
+        provenance: resolved.provenance,
+        warnings: resolved.warnings,
+    })
+}
 
-        let env_id = std::env::var("GREENTIC_ENV").unwrap_or_else(|_| "dev".to_string());
-        let default_team = std::env::var("GREENTIC_TEAM").unwrap_or_else(|_| "gui".to_string());
-        let oauth_broker_url = std::env::var("OAUTH_BROKER_URL").ok();
-        let oauth_issuer = std::env::var("OAUTH_ISSUER").ok();
-        let oauth_audience = std::env::var("OAUTH_AUDIENCE").ok();
-        let oauth_jwks_url = std::env::var("OAUTH_JWKS_URL").ok();
-        let oauth_required_scopes = std::env::var("OAUTH_REQUIRED_SCOPES")
-            .ok()
-            .map(|s| {
-                s.split(',')
-                    .filter(|v| !v.is_empty())
-                    .map(|v| v.trim().to_string())
-                    .collect()
-            })
-            .unwrap_or_default();
+fn map_to_app_config(resolved: GreenticConfig, cli: &crate::CliArgs) -> AppConfig {
+    let bind_addr = cli
+        .bind_addr
+        .unwrap_or_else(|| "0.0.0.0:8080".parse().unwrap());
+    let public_base_url = cli.public_base_url.clone();
+    let env_id = resolved.environment.env_id.to_string();
+    let default_tenant = resolved
+        .dev
+        .as_ref()
+        .map(|d| d.default_tenant.clone())
+        .unwrap_or_else(|| "tenant-default".to_string());
+    let default_team = resolved
+        .dev
+        .as_ref()
+        .and_then(|d| d.default_team.clone())
+        .unwrap_or_else(|| "gui".to_string());
 
-        let distributor =
-            std::env::var("GREENTIC_DISTRIBUTOR_URL")
-                .ok()
-                .map(|base| DistributorConfig {
-                    base_url: base,
-                    environment_id: std::env::var("GREENTIC_DISTRIBUTOR_ENV")
-                        .unwrap_or_else(|_| env_id.clone()),
-                    auth_token: std::env::var("GREENTIC_DISTRIBUTOR_TOKEN").ok(),
-                    packs_json: std::env::var("GREENTIC_DISTRIBUTOR_PACKS").ok(),
-                });
+    // Place packs under the state dir by default to avoid scattering artifacts.
+    let pack_root = resolved.paths.state_dir.join("packs");
 
-        let pack_cache_ttl = std::env::var("PACK_CACHE_TTL_SECS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .map(Duration::from_secs)
-            .unwrap_or(Duration::from_secs(0));
-        let session_ttl = std::env::var("SESSION_TTL_SECS")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .map(Duration::from_secs)
-            .unwrap_or(Duration::from_secs(0));
+    let distributor = distributor_from_config(&resolved);
 
-        let tenant_map = std::env::var("TENANT_MAP_JSON")
-            .ok()
-            .and_then(|v| {
-                serde_json::from_str::<std::collections::HashMap<String, String>>(&v).ok()
-            })
-            .map(TenantMap)
-            .unwrap_or_default();
+    AppConfig {
+        bind_addr,
+        public_base_url,
+        pack_root,
+        default_tenant,
+        enable_cors: false,
+        pack_cache_ttl: Duration::from_secs(0),
+        session_ttl: Duration::from_secs(0),
+        env_id,
+        default_team,
+        distributor,
+        oauth_broker_url: std::env::var("OAUTH_BROKER_URL").ok(),
+        oauth_issuer: std::env::var("OAUTH_ISSUER").ok(),
+        oauth_audience: std::env::var("OAUTH_AUDIENCE").ok(),
+        oauth_jwks_url: std::env::var("OAUTH_JWKS_URL").ok(),
+        oauth_required_scopes: oauth_required_scopes(),
+        resolved,
+    }
+}
 
-        Ok(Self {
-            bind_addr,
-            pack_root,
-            default_tenant,
-            enable_cors,
-            pack_cache_ttl,
-            session_ttl,
-            tenant_map,
-            env_id,
-            default_team,
-            distributor,
-            oauth_broker_url,
-            oauth_issuer,
-            oauth_audience,
-            oauth_jwks_url,
-            oauth_required_scopes,
+fn distributor_from_config(resolved: &GreenticConfig) -> Option<DistributorConfig> {
+    resolved
+        .packs
+        .as_ref()
+        .and_then(|packs| match &packs.source {
+            PackSourceConfig::HttpIndex { url } => Some(DistributorConfig {
+                base_url: url.clone(),
+                environment_id: resolved.environment.env_id.to_string(),
+                auth_token_ref: None,
+                packs_json: None,
+            }),
+            PackSourceConfig::OciRegistry { reference } => Some(DistributorConfig {
+                base_url: reference.clone(),
+                environment_id: resolved.environment.env_id.to_string(),
+                auth_token_ref: None,
+                packs_json: None,
+            }),
+            PackSourceConfig::LocalIndex { .. } => None,
         })
-    }
+}
 
-    pub fn tenant_for_domain<'a>(&'a self, domain: &'a str) -> &'a str {
-        self.tenant_map
-            .0
-            .get(domain)
-            .map(|s| s.as_str())
-            .unwrap_or(&self.default_tenant)
-    }
+fn oauth_required_scopes() -> Vec<String> {
+    std::env::var("OAUTH_REQUIRED_SCOPES")
+        .ok()
+        .map(|s| {
+            s.split(',')
+                .filter(|v| !v.is_empty())
+                .map(|v| v.trim().to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn project_root_from_cwd() -> anyhow::Result<Option<PathBuf>> {
+    let cwd = std::env::current_dir()?;
+    Ok(greentic_config::discover_project_root(&cwd))
 }

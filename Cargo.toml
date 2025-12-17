@@ -1,6 +1,6 @@
 [package]
 name = "greentic-gui"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 
 [features]
@@ -33,7 +33,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs", "signal", "sync"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["trace", "compression-br", "compression-deflate", "compression-gzip", "cors"] }
+tower-http = { version = "0.6", features = ["trace", "compression-br", "compression-deflate", "compression-gzip", "cors", "set-header"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 serde_with = "3.9"
@@ -45,7 +45,11 @@ regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 greentic-interfaces-host = { version = "0.4.54", default-features = false, features = ["worker-v1", "gui-fragment"] }
 url = "2"
+greentic-config = "0.4"
+greentic-config-types = "0.4"
 zip = "0.6"
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["macros", "json"] }
