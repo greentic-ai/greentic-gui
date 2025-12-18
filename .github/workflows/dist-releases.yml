@@ -129,9 +129,9 @@ jobs:
 
             # Force-move (or create) the nightly tag to this commit.
             if gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" >/dev/null 2>&1; then
-              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" -f sha="${GITHUB_SHA}" -f force=true >/dev/null
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" -f sha="${GITHUB_SHA}" -F force=true >/dev/null
             else
-              gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${tag}" -f sha="${GITHUB_SHA}" >/dev/null
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${tag}" -f sha="${GITHUB_SHA}" -F force=true >/dev/null
             fi
           fi
 
