@@ -17,6 +17,9 @@ installers = []
 
 cargo-dist-version = "0.28.0"
 
+# Binstall-friendly archive formats: `.tar.gz` on unix, `.zip` on Windows.
+archive-formats = ["tar.gz", "zip"]
+
 # Targets we publish prebuilt archives for.
 targets = [
   "x86_64-unknown-linux-gnu",
@@ -24,6 +27,12 @@ targets = [
   "x86_64-apple-darwin",
   "aarch64-apple-darwin",
 ]
+
+[profile.dist]
+inherits = "release"
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
 
 [features]
 default = []
