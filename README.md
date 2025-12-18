@@ -8,6 +8,14 @@ Axum-based Greentic GUI runtime that serves tenant-specific GUI packs, enforces 
 cargo run
 ```
 
+## Installation (crates.io)
+
+From source via crates.io:
+
+```bash
+cargo install greentic-gui --locked
+```
+
 ## Installation (prebuilt binaries)
 
 This repo publishes “binstall-ready” archives for Linux/macOS/Windows via GitHub Releases.

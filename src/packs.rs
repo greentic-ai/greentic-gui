@@ -17,7 +17,7 @@ use tokio::io::AsyncWriteExt;
 use tracing::{debug, warn};
 use uuid::Uuid;
 use zip::CompressionMethod;
-use zip::write::FileOptions;
+use zip::write::{ExtendedFileOptions, FileOptions};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
@@ -735,12 +735,12 @@ fn create_local_gtpack(root: &Path) -> Option<String> {
     let out_path = root.join("cached.gtpack");
     let file = std::fs::File::create(&out_path).ok()?;
     let mut writer = zip::ZipWriter::new(file);
-    let options = FileOptions::default()
+    let options: FileOptions<ExtendedFileOptions> = FileOptions::default()
         .compression_method(CompressionMethod::Stored)
         .unix_permissions(0o644);
 
     let manifest_bytes = fs::read(&manifest_path).ok()?;
-    if writer.start_file("manifest.cbor", options).is_err() {
+    if writer.start_file("manifest.cbor", options.clone()).is_err() {
         return None;
     }
     if writer.write_all(&manifest_bytes).is_err() {
@@ -755,7 +755,7 @@ fn create_local_gtpack(root: &Path) -> Option<String> {
             for entry in list_files_recursively(&dir) {
                 let rel = entry.strip_prefix(root).ok()?;
                 let logical = rel.to_string_lossy().replace('\\', "/");
-                if writer.start_file(logical, options).is_err() {
+                if writer.start_file(logical, options.clone()).is_err() {
                     return None;
                 }
                 let bytes = fs::read(&entry).ok()?;

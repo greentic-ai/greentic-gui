@@ -1,8 +1,14 @@
 [package]
 name = "greentic-gui"
-version = "0.4.3"
+version = "0.4.4"
 edition = "2024"
+description = "Greentic GUI runtime (Axum-based) that serves tenant packs, enforces auth, and exposes worker/session APIs plus a browser SDK."
+license = "MIT"
+homepage = "https://greentic.ai"
 repository = "https://github.com/greentic-ai/greentic-gui"
+documentation = "https://github.com/greentic-ai/greentic-gui"
+readme = "README.md"
+keywords = ["greentic", "gui", "axum", "runtime", "wasm"]
 
 [workspace]
 members = ["."]
@@ -78,9 +84,9 @@ greentic-interfaces-host = { version = "0.4.54", default-features = false, featu
 url = "2"
 greentic-config = "0.4"
 greentic-config-types = "0.4"
-zip = "0.6"
+zip = "6"
 clap = { version = "4", features = ["derive"] }
-toml = "0.8"
+toml = "0.9"
 
 [dev-dependencies]
 axum = { version = "0.8", features = ["macros", "json"] }
